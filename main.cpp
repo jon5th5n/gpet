@@ -2,7 +2,9 @@
 #include "../imgui/imgui-SFML.h"
 #include "../imgui/imgui.h"
 
+#include "hsv.h"
 #include "image.h"
+#include "rgb.h"
 
 int main()
 {
@@ -22,6 +24,7 @@ int main()
 	gpet::Image image;
 	sf::Texture texture;
 
+	bool showImagedFiltered = false;
 	float imageDisplayScale = 0.5;
 	sf::Vector2f imageDisplayPosition(0, 0);
 
@@ -66,7 +69,7 @@ int main()
 			{
 				image.loadFromFile(std::string(imagePath));
 				texture.create(image.getSize().x, image.getSize().y);
-				texture.update(image.getPixelArray());
+				texture.update(image.getPixelArray(showImagedFiltered));
 			}
 			ImGui::SameLine();
 			if (ImGui::Button("Save Image"))
@@ -82,40 +85,58 @@ int main()
 			if (ImGui::Button("Flip Horizontally"))
 			{
 				image.flipHorizontal();
-				texture.update(image.getPixelArray());
+				texture.update(image.getPixelArray(showImagedFiltered));
 			}
 			if (ImGui::Button("Flip Vertically"))
 			{
 				image.flipVertical();
-				texture.update(image.getPixelArray());
+				texture.update(image.getPixelArray(showImagedFiltered));
 			}
 
 			if (ImGui::Button("Rotate Left"))
 			{
 				image.rotateLeft();
 				texture.create(image.getSize().x, image.getSize().y);
-				texture.update(image.getPixelArray());
+				texture.update(image.getPixelArray(showImagedFiltered));
 			}
 			ImGui::SameLine();
 			if (ImGui::Button("Rotate Right"))
 			{
 				image.rotateRight();
 				texture.create(image.getSize().x, image.getSize().y);
-				texture.update(image.getPixelArray());
+				texture.update(image.getPixelArray(showImagedFiltered));
 			}
 			if (ImGui::Button("Rotate 180°"))
 			{
 				image.rotate180();
-				texture.update(image.getPixelArray());
+				texture.update(image.getPixelArray(showImagedFiltered));
 			}
 		}
 
 		if (ImGui::CollapsingHeader("Color Manipulation"))
 		{
+			if (ImGui::Checkbox("Show Filtered", &showImagedFiltered))
+			{
+				texture.update(image.getPixelArray(showImagedFiltered));
+			}
+
 			if (ImGui::Button("Make Greyscale"))
 			{
 				image.makeGreyScale();
-				texture.update(image.getPixelArray());
+				texture.update(image.getPixelArray(showImagedFiltered));
+			}
+
+			if (ImGui::SliderFloat("Hue", &image.addedHue, 0.0f, 360.0f))
+			{
+				texture.update(image.getPixelArray(showImagedFiltered));
+			}
+			if (ImGui::SliderFloat("Saturation", &image.addedSaturation, -1.0f, 1.0f))
+			{
+				texture.update(image.getPixelArray(showImagedFiltered));
+			}
+			if (ImGui::SliderFloat("Value", &image.addedValue, -1.0f, 1.0f))
+			{
+				texture.update(image.getPixelArray(showImagedFiltered));
 			}
 		}
 
@@ -149,7 +170,7 @@ int main()
 			{
 				if (previouslyDrawing)
 					image.draw((sf::Mouse::getPosition(window).x - imageDisplayPosition.x) / imageDisplayScale, (sf::Mouse::getPosition(window).y - imageDisplayPosition.y) / imageDisplayScale, (previousMousePosition.x - imageDisplayPosition.x) / imageDisplayScale, (previousMousePosition.y - imageDisplayPosition.y) / imageDisplayScale, currentBrush, brushSize, sf::Color(drawingColor[0] * 255, drawingColor[1] * 255, drawingColor[2] * 255, drawingColor[3] * 255));
-				texture.update(image.getPixelArray());
+				texture.update(image.getPixelArray(showImagedFiltered));
 
 				previouslyDrawing = true;
 			}

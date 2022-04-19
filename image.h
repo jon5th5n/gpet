@@ -1,4 +1,5 @@
 #pragma once
+#include "rgb.h"
 
 namespace gpet
 {
@@ -6,24 +7,33 @@ namespace gpet
 class Image
 {
 	uint8_t* pixels;
+	uint8_t* pixelsFiltered;
 	sf::Vector2u size;
 
 public:
+	float addedHue = 0.0f;
+	float addedSaturation = 0.0f;
+	float addedValue = 0.0f;
+
 	Image() :
 		pixels(new uint8_t[0]),
+		pixelsFiltered(new uint8_t[0]),
 		size(sf::Vector2u(0, 0))
 	{}
 
 	Image(gpet::Image* img) :
 		pixels(new uint8_t[img->getSize().x * img->getSize().y * 4]),
+		pixelsFiltered(new uint8_t[img->getSize().x * img->getSize().y * 4]),
 		size(sf::Vector2u(img->getSize().x, img->getSize().y))
 	{
 		std::copy(&(img->getPixelArray()[0]), &(img->getPixelArray()[(img->getSize().x * img->getSize().y * 4) - 1]), &pixels[0]);
+		std::copy(&(img->getPixelArray()[0]), &(img->getPixelArray()[(img->getSize().x * img->getSize().y * 4) - 1]), &pixelsFiltered[0]);
 	}
 
 	~Image()
 	{
 		delete[] pixels;
+		delete[] pixelsFiltered;
 	}
 
 	void loadFromFile(std::string filepath)
@@ -35,6 +45,10 @@ public:
 		pixels = new uint8_t[img.getSize().x * img.getSize().y * 4];
 		for (uint i = 0; i < img.getSize().x * img.getSize().y * 4; i++)
 			pixels[i] = img.getPixelsPtr()[i];
+
+		delete[] pixelsFiltered;
+		pixelsFiltered = new uint8_t[img.getSize().x * img.getSize().y * 4];
+		std::copy(&(pixels[0]), &(pixels[(img.getSize().x * img.getSize().y * 4) - 1]), &pixelsFiltered[0]);
 
 		size = img.getSize();
 	}
@@ -57,10 +71,35 @@ public:
 	{
 		return pixels;
 	}
-
-	sf::Color getPixel(uint x, uint y)
+	uint8_t* getPixelArrayFiltered()
 	{
-		sf::Color c;
+		for (uint i = 0; i < size.x * size.y; i++)
+		{
+			gpet::RGB c(pixels[i * 4 + 0], pixels[i * 4 + 1], pixels[i * 4 + 2], pixels[i * 4 + 3]);
+			gpet::HSV hsv = c.toHSV();
+
+			hsv.h = fmod(hsv.h + addedHue, 360.0f);
+			hsv.s = std::clamp(hsv.s + addedSaturation, 0.0f, 1.0f);
+			hsv.v = std::clamp(hsv.v + addedValue, 0.0f, 1.0f);
+
+			c = gpet::RGB(hsv);
+
+			pixelsFiltered[i * 4 + 0] = c.r;
+			pixelsFiltered[i * 4 + 1] = c.g;
+			pixelsFiltered[i * 4 + 2] = c.b;
+			pixelsFiltered[i * 4 + 3] = c.a;
+		}
+
+		return pixelsFiltered;
+	}
+	uint8_t* getPixelArray(bool filtered)
+	{
+		return filtered ? getPixelArrayFiltered() : pixels;
+	}
+
+	gpet::RGB getPixel(uint x, uint y)
+	{
+		gpet::RGB c;
 
 		c.r = pixels[(x + (y * size.x)) * 4 + 0];
 		c.g = pixels[(x + (y * size.x)) * 4 + 1];
@@ -69,8 +108,19 @@ public:
 
 		return c;
 	}
+	gpet::RGB getPixelFiltered(uint x, uint y)
+	{
+		gpet::RGB c;
 
-	void setPixel(uint x, uint y, sf::Color c)
+		c.r = pixelsFiltered[(x + (y * size.x)) * 4 + 0];
+		c.g = pixelsFiltered[(x + (y * size.x)) * 4 + 1];
+		c.b = pixelsFiltered[(x + (y * size.x)) * 4 + 2];
+		c.a = pixelsFiltered[(x + (y * size.x)) * 4 + 3];
+
+		return c;
+	}
+
+	void setPixel(uint x, uint y, gpet::RGB c)
 	{
 		pixels[(x + (y * size.x)) * 4 + 0] = c.r;
 		pixels[(x + (y * size.x)) * 4 + 1] = c.g;
@@ -129,19 +179,21 @@ public:
 				setPixel(i, j, imgcpy.getPixel(size.x - 1 - i, size.y - 1 - j));
 	}
 
+	//---
+
 	void makeGreyScale()
 	{
 		for (uint i = 0; i < size.x; i++)
 			for (uint j = 0; j < size.y; j++)
 			{
 				uint8_t greyValue = getPixel(i, j).r * 0.299 + getPixel(i, j).g * 0.587 + getPixel(i, j).b * 0.114;
-				setPixel(i, j, sf::Color { greyValue, greyValue, greyValue });
+				setPixel(i, j, gpet::RGB { greyValue, greyValue, greyValue });
 			}
 	}
 
 	//---
 
-	void draw(uint x, uint y, uint brush, uint brushSize, sf::Color color)
+	void draw(uint x, uint y, uint brush, uint brushSize, gpet::RGB color)
 	{
 		switch (brush)
 		{
@@ -180,7 +232,7 @@ public:
 				break;
 		}
 	}
-	void draw(uint x, uint y, uint lastX, uint lastY, uint brush, uint brushSize, sf::Color color)
+	void draw(uint x, uint y, uint lastX, uint lastY, uint brush, uint brushSize, gpet::RGB color)
 	{
 		uint numberPoints = abs((int)x - (int)lastX) > abs((int)y - (int)lastY) ? abs((int)x - (int)lastX) / 2 : abs((int)y - (int)lastY) / 2;
 
