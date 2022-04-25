@@ -117,6 +117,9 @@ struct RGB
 			result.h = 60 * ((r_ - g_) / delta + 4);
 		}
 
+		if (result.h < 0.0f)
+			result.h += 360.0f;
+
 		result.s = cmax == 0.0f ? 0.0f : (delta / cmax);
 		result.v = cmax;
 

@@ -18,11 +18,14 @@ int main()
 	bool previouslyDrawing = false;
 
 	//---
-
-	char imagePath[255] = "/home/jonathan/Downloads/Physik/pipipupu.png";
+	// char imagePath[255] = "/home/jonathan/Downloads/testimg.jpg";
+	char imagePath[255] = "/home/jonathan/Downloads/colortest.png";
 
 	gpet::Image image;
 	sf::Texture texture;
+
+	bool saveImageFiltered = true;
+	float addColorKey[2] = { 0.0f, 0.0f };
 
 	bool showImagedFiltered = false;
 	float imageDisplayScale = 0.5;
@@ -74,8 +77,10 @@ int main()
 			ImGui::SameLine();
 			if (ImGui::Button("Save Image"))
 			{
-				image.saveToFile(std::string(imagePath));
+				image.saveToFile(std::string(imagePath), saveImageFiltered);
 			}
+			ImGui::SameLine();
+			ImGui::Checkbox("filtered", &saveImageFiltered);
 		}
 
 		ImGui::Separator();
@@ -115,16 +120,21 @@ int main()
 
 		if (ImGui::CollapsingHeader("Color Manipulation"))
 		{
-			if (ImGui::Checkbox("Show Filtered", &showImagedFiltered))
-			{
-				texture.update(image.getPixelArray(showImagedFiltered));
-			}
-
 			if (ImGui::Button("Make Greyscale"))
 			{
 				image.makeGreyScale();
 				texture.update(image.getPixelArray(showImagedFiltered));
 			}
+		}
+
+		if (ImGui::CollapsingHeader("Filter"))
+		{
+			if (ImGui::Checkbox("Show Filtered", &showImagedFiltered))
+			{
+				texture.update(image.getPixelArray(showImagedFiltered));
+			}
+
+			ImGui::Separator();
 
 			if (ImGui::SliderFloat("Hue", &image.addedHue, 0.0f, 360.0f))
 			{
@@ -138,6 +148,42 @@ int main()
 			{
 				texture.update(image.getPixelArray(showImagedFiltered));
 			}
+
+			ImGui::Separator();
+
+			ImGui::InputFloat2("", addColorKey, "%.1f");
+			ImGui::SameLine();
+			if (ImGui::Button("Add Key"))
+			{
+				image.colorKeys.push_back({ std::clamp(addColorKey[0], 0.0f, 360.0f), std::clamp(addColorKey[1], -180.0f, 180.0f) });
+				texture.update(image.getPixelArray(showImagedFiltered));
+			}
+
+			ImGui::BeginTable("Color Keys", 3);
+
+			ImGui::TableSetupColumn("Hue");
+			ImGui::TableSetupColumn("Margin");
+			ImGui::TableSetupColumn("");
+			ImGui::TableHeadersRow();
+
+			for (uint i = 0; i < image.colorKeys.size(); i++)
+			{
+				ImGui::TableNextColumn();
+				ImGui::Text("%.1f", image.colorKeys[i].first);
+				ImGui::TableNextColumn();
+				ImGui::Text("%.1f", image.colorKeys[i].second);
+				ImGui::TableNextColumn();
+
+				ImGui::PushID(i);
+				if (ImGui::Button("Delete"))
+				{
+					image.colorKeys.erase(std::next(image.colorKeys.begin(), i));
+					texture.update(image.getPixelArray(showImagedFiltered));
+				}
+				ImGui::PopID();
+			}
+
+			ImGui::EndTable();
 		}
 
 		if (ImGui::CollapsingHeader("Drawing"))

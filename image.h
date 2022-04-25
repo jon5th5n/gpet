@@ -14,6 +14,7 @@ public:
 	float addedHue = 0.0f;
 	float addedSaturation = 0.0f;
 	float addedValue = 0.0f;
+	std::vector<std::pair<float, float>> colorKeys;
 
 	Image() :
 		pixels(new uint8_t[0]),
@@ -53,10 +54,12 @@ public:
 		size = img.getSize();
 	}
 
-	void saveToFile(std::string filepath)
+	void saveToFile(std::string filepath, bool filtered)
 	{
+		uint8_t* pix = filtered ? pixelsFiltered : pixels;
+
 		sf::Image img;
-		img.create(size.x, size.y, pixels);
+		img.create(size.x, size.y, pix);
 		img.saveToFile(filepath);
 	}
 
@@ -78,11 +81,42 @@ public:
 			gpet::RGB c(pixels[i * 4 + 0], pixels[i * 4 + 1], pixels[i * 4 + 2], pixels[i * 4 + 3]);
 			gpet::HSV hsv = c.toHSV();
 
+			//-----
+
 			hsv.h = fmod(hsv.h + addedHue, 360.0f);
 			hsv.s = std::clamp(hsv.s + addedSaturation, 0.0f, 1.0f);
 			hsv.v = std::clamp(hsv.v + addedValue, 0.0f, 1.0f);
 
+			bool inKeys = true;
+			for (auto key : colorKeys)
+			{
+				float top = fmod(key.first + key.second, 360.0f);
+				float bottom = fmod(key.first - key.second, 360.0f);
+				if (bottom < 0)
+					bottom += 360.0f;
+
+				if (top < bottom)
+					if (!(hsv.h < bottom && hsv.h > top))
+					{
+						inKeys = false;
+						continue;
+					}
+
+				if (hsv.h < top && hsv.h > bottom)
+					inKeys = false;
+			}
+
+			//-
 			c = gpet::RGB(hsv);
+			//-
+
+			if (!inKeys)
+			{
+				uint8_t greyValue = c.r * 0.299 + c.g * 0.587 + c.b * 0.114;
+				c = gpet::RGB(greyValue, greyValue, greyValue);
+			}
+
+			//-----
 
 			pixelsFiltered[i * 4 + 0] = c.r;
 			pixelsFiltered[i * 4 + 1] = c.g;
