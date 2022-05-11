@@ -1,8 +1,9 @@
 #pragma once
+#include "hsv.h"
 
 namespace gpet
 {
-struct HSV;
+// struct HSV;
 
 struct RGB
 {
@@ -124,6 +125,29 @@ struct RGB
 		result.v = cmax;
 
 		return result;
+	}
+
+	gpet::RGB convertToGreyNatural()
+	{
+		uint8_t greyValue = r * 0.299 + g * 0.587 + b * 0.114;
+		return gpet::RGB(greyValue, greyValue, greyValue);
+	}
+
+	gpet::RGB invert()
+	{
+		return gpet::RGB(255 - r, 255 - g, 255 - b);
+	}
+
+	static gpet::RGB lerp(gpet::RGB c1, gpet::RGB c2, float a)
+	{
+		gpet::RGB c;
+
+		c.r = std::lerp(c1.r, c2.r, a);
+		c.g = std::lerp(c1.g, c2.g, a);
+		c.b = std::lerp(c1.b, c2.b, a);
+		c.a = std::lerp(c1.a, c2.a, a);
+
+		return c;
 	}
 };
 }

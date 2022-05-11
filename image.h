@@ -1,4 +1,5 @@
 #pragma once
+#include "filter.h"
 #include "rgb.h"
 
 namespace gpet
@@ -6,60 +7,50 @@ namespace gpet
 
 class Image
 {
-	uint8_t* pixels;
-	uint8_t* pixelsFiltered;
-	sf::Vector2u size;
+	std::vector<uint8_t> pixels;
+	std::vector<uint8_t> pixelsFiltered;
+	sf::Vector2u size { 0, 0 };
 
 public:
-	float addedHue = 0.0f;
-	float addedSaturation = 0.0f;
-	float addedValue = 0.0f;
-	std::vector<std::pair<float, float>> colorKeys;
-
-	Image() :
-		pixels(new uint8_t[0]),
-		pixelsFiltered(new uint8_t[0]),
-		size(sf::Vector2u(0, 0))
+	Image()
 	{}
 
 	Image(gpet::Image* img) :
-		pixels(new uint8_t[img->getSize().x * img->getSize().y * 4]),
-		pixelsFiltered(new uint8_t[img->getSize().x * img->getSize().y * 4]),
 		size(sf::Vector2u(img->getSize().x, img->getSize().y))
 	{
-		std::copy(&(img->getPixelArray()[0]), &(img->getPixelArray()[(img->getSize().x * img->getSize().y * 4) - 1]), &pixels[0]);
-		std::copy(&(img->getPixelArray()[0]), &(img->getPixelArray()[(img->getSize().x * img->getSize().y * 4) - 1]), &pixelsFiltered[0]);
+		pixels = img->pixels;
+		pixelsFiltered = img->pixelsFiltered;
+	}
+
+	Image(std::string filepath)
+	{
+		loadFromFile(filepath);
 	}
 
 	~Image()
-	{
-		delete[] pixels;
-		delete[] pixelsFiltered;
-	}
+	{}
 
 	void loadFromFile(std::string filepath)
 	{
 		sf::Image img;
 		img.loadFromFile(filepath);
-
-		delete[] pixels;
-		pixels = new uint8_t[img.getSize().x * img.getSize().y * 4];
-		for (uint i = 0; i < img.getSize().x * img.getSize().y * 4; i++)
-			pixels[i] = img.getPixelsPtr()[i];
-
-		delete[] pixelsFiltered;
-		pixelsFiltered = new uint8_t[img.getSize().x * img.getSize().y * 4];
-		std::copy(&(pixels[0]), &(pixels[(img.getSize().x * img.getSize().y * 4) - 1]), &pixelsFiltered[0]);
+		const sf::Uint8* imgPixels = img.getPixelsPtr();
 
 		size = img.getSize();
+
+		pixels.resize(size.x * size.y * 4);
+		for (uint i = 0; i < img.getSize().x * img.getSize().y * 4; i++)
+			pixels[i] = imgPixels[i];
+
+		pixelsFiltered = pixels;
 	}
 
 	void saveToFile(std::string filepath, bool filtered)
 	{
-		uint8_t* pix = filtered ? pixelsFiltered : pixels;
+		std::vector<uint8_t> pix = filtered ? pixelsFiltered : pixels;
 
 		sf::Image img;
-		img.create(size.x, size.y, pix);
+		img.create(size.x, size.y, &pix[0]);
 		img.saveToFile(filepath);
 	}
 
@@ -70,11 +61,11 @@ public:
 		return size;
 	}
 
-	uint8_t* getPixelArray()
+	std::vector<uint8_t> getPixelArray()
 	{
 		return pixels;
 	}
-	uint8_t* getPixelArrayFiltered()
+	std::vector<uint8_t> getPixelArray(gpet::Filter filter)
 	{
 		for (uint i = 0; i < size.x * size.y; i++)
 		{
@@ -83,17 +74,19 @@ public:
 
 			//-----
 
-			hsv.h = fmod(hsv.h + addedHue, 360.0f);
-			hsv.s = std::clamp(hsv.s + addedSaturation, 0.0f, 1.0f);
-			hsv.v = std::clamp(hsv.v + addedValue, 0.0f, 1.0f);
+			hsv.h = fmod(hsv.h + filter.addedHue, 360.0f);
+			hsv.s = std::clamp(hsv.s + filter.addedSaturation, 0.0f, 1.0f);
+			hsv.v = std::clamp(hsv.v + filter.addedValue, 0.0f, 1.0f);
 
 			bool inKeys = true;
-			for (auto key : colorKeys)
+			for (auto key : filter.colorKeys)
 			{
 				float top = fmod(key.first + key.second, 360.0f);
 				float bottom = fmod(key.first - key.second, 360.0f);
 				if (bottom < 0)
 					bottom += 360.0f;
+				if (top < 0)
+					top += 360.0f;
 
 				if (top < bottom)
 					if (!(hsv.h < bottom && hsv.h > top))
@@ -116,6 +109,10 @@ public:
 				c = gpet::RGB(greyValue, greyValue, greyValue);
 			}
 
+			c.r *= filter.redInstensity * filter.brightness;
+			c.g *= filter.greenInstensity * filter.brightness;
+			c.b *= filter.blueInstensity * filter.brightness;
+
 			//-----
 
 			pixelsFiltered[i * 4 + 0] = c.r;
@@ -125,10 +122,6 @@ public:
 		}
 
 		return pixelsFiltered;
-	}
-	uint8_t* getPixelArray(bool filtered)
-	{
-		return filtered ? getPixelArrayFiltered() : pixels;
 	}
 
 	gpet::RGB getPixel(uint x, uint y)
@@ -219,10 +212,14 @@ public:
 	{
 		for (uint i = 0; i < size.x; i++)
 			for (uint j = 0; j < size.y; j++)
-			{
-				uint8_t greyValue = getPixel(i, j).r * 0.299 + getPixel(i, j).g * 0.587 + getPixel(i, j).b * 0.114;
-				setPixel(i, j, gpet::RGB { greyValue, greyValue, greyValue });
-			}
+				setPixel(i, j, getPixel(i, j).convertToGreyNatural());
+	}
+
+	void invert()
+	{
+		for (uint i = 0; i < size.x; i++)
+			for (uint j = 0; j < size.y; j++)
+				setPixel(i, j, getPixel(i, j).invert());
 	}
 
 	//---
